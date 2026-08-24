@@ -1,0 +1,62 @@
+# CloudStream eklentilerini derleyip "builds" branch'ine yükleyen GitHub Actions workflow'u.
+# Main branch'ine push veya manuel tetikleme ile çalışır.
+
+name: CloudStream Builder
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:                # Manuel çalıştırma
+  push:
+    branches:
+      - main                        # Sadece main branch'ine push olunca tetiklenir
+    paths-ignore:                   # Bu tür dosyalar değiştiğinde çalışmasın
+      - "**/*.md"
+      - "**/*.yml"
+      - "**/*.jpg"
+      - "**/*.png"
+      - "**/*.py"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Kaynak kodlarını (src) checkout et
+      - name: "Kaynak depoyu kontrol et (src)"
+        uses: actions/checkout@v4.2.2
+        with:
+          path: "src"
+
+      # 2. Derleme çıktılarının bulunduğu branch'i (builds) checkout et
+      - name: "Derleme depoyu kontrol et (builds)"
+        uses: actions/checkout@v4.2.2
+        with:
+          ref: "builds"
+          path: "builds"
+
+      # 3. Önceki derleme dosyalarını temizle (varsa)
+      - name: "Eski derlemeleri temizle"
+        run: rm $GITHUB_WORKSPACE/builds/*.cs3 || true
+
+      # 4. JDK 17'yi kur (Gradle için gerekli)
+      - name: "JDK 17'yi ayarla"
+        uses: actions/setup-java@v4.6.0
+        with:
+          distribution: adopt
+          java-version: 17
+
+      # 5. Android SDK'yı kur (Android projeleri için)
+      - name: "Android SDK'yı ayarla"
+        uses: android-actions/setup-android@v3.2.2
+
+      # 6. Eklentileri derle, plugins.json'u oluştur ve çıktıları builds klasörüne kopyala
+      - name: "Eklentileri derle ve kopyala"
+        run: |
+          cd $GITHUB_WORKSPACE/src
+          chmod +x gradlew
+          ./gradlew make makePluginsJson
+          cp **/build/*.cs3 $GITHUB_WORKSPACE/builds
+          cp build/plugins.json $GITHUB_WORKSPACE/builds
