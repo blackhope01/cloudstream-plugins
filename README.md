@@ -4,7 +4,9 @@
 2. **Uygulamanın yüklü olduğu cihazda** _[depoyu otomatik yüklemek için tıklayın](https://blackhope01.github.io/redirect/?r=cloudstreamrepo://raw.githubusercontent.com/blackhope01/cloudstream-plugins/refs/heads/main/repo.json)_
    - **veya**
    - `Depo ekle` _butonuyla **manuel** ekleme yapma_
-   - **Kısa kod** `blackhope01`
+   - **Kısa kod 1** `blackhope01`
+   - **Kısa kod 2** `!blackhope01`
+   - **Depo Url**   `https://raw.githubusercontent.com/blackhope01/cloudstream-plugins/refs/heads/main/repo.json`
 
 ---
 
