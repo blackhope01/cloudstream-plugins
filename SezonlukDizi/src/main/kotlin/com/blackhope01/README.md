@@ -1,0 +1,1 @@
+CAPTCHA olan kaynaklara tekrar bakılıp extractor yazılacak.

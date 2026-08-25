@@ -1,0 +1,8 @@
+{
+  "name": "blackhope01",
+  "description": "Türkçe içerikli eklenti havuzu",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/blackhope01/cloudstream-plugins/refs/heads/builds/plugins.json"
+  ]
+}

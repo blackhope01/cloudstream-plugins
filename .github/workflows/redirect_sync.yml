@@ -1,0 +1,77 @@
+# Domain Değişikliklerini Otomatik Kontrol Eden GitHub Actions Workflow'u
+# Bu workflow, belirlenen aralıklarla çalışır ve eklenti URL'lerini günceller.
+
+name: Domain Change Checker
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:                # Manuel tetikleme
+  schedule:
+    - cron: 11 */9 * * *            # Her 9 saatte bir (11. dakikada)
+
+jobs:
+  domain-check:
+    runs-on: ubuntu-latest
+    #runs-on: self-hosted            # Özel runner kullanılıyor
+
+    env:
+      REPO_OWNER: ${{ github.repository_owner }}
+      REPO_NAME: ${{ github.event.repository.name }}
+
+    permissions:
+      contents: write               # Dosyaları değiştirmek için
+
+    steps:
+      # 1. Depoyu kontrol et (checkout) - Build workflow'unun tetiklenmesi için PAT kullanılıyor
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      # 2. Python 3.11.8'i kur
+      - name: Set up Python 3.11.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11.8
+
+      # 3. Python sürümünü göster (debug amaçlı)
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
+      # 4. Gerekli kütüphaneleri yükle
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -U setuptools wheel cloudscraper pycryptodome
+
+      # 5. Asıl URL güncelleme betiğini çalıştır
+      - name: Run URL updater script
+        run: python redirect_sync.py
+
+      # 6. Değişiklik olup olmadığını kontrol et (git diff)
+      - name: Check for changes
+        id: changes_check
+        run: |
+          git diff --quiet . || echo "changed=true" >> $GITHUB_OUTPUT || true
+
+      # 7. Değişiklik varsa direkt main branch'ine commit ve push yap
+      - name: Commit and push changes
+        if: steps.changes_check.outputs.changed == 'true'
+        run: |
+          # Git kullanıcı bilgilerini ayarla
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Tüm değişiklikleri ekle
+          git add -A
+
+          # Değişiklikleri commit et (özel yazar bilgisiyle)
+          git commit --author="blackhope01 <blackhope01@users.noreply.github.com>" \
+            -m "♻️ Domain Değişikliği" \
+            -m "🔄 Otomatik domain güncellemeleri yapıldı."
+
+          # Direkt main branch'ine push et
+          git push origin HEAD:main

@@ -1,0 +1,87 @@
+name: CloudStream Build
+
+# Bu workflow, main branch'ine push yapıldığında otomatik olarak tetiklenir
+# ve eklentileri derleyip "builds" branch'ine yükler.
+# https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#concurrency
+concurrency:
+  group: "build"
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+    # Bu dosyalarda değişiklik olursa workflow tetiklenmez
+    paths-ignore:
+      - '*.md'
+      - '.github/workflows/**'
+      - 'repo.json'
+      - 'redirect_sync.py'
+  # Actions sekmesinden manuel çalıştırma imkanı sağlar
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Kaynak kodları "src" klasörüne çeker
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          path: "src"
+
+      # Derlenmiş eklentilerin tutulduğu "builds" branch'ini çeker
+      - name: Checkout builds branch
+        uses: actions/checkout@v4
+        with:
+          ref: "builds"
+          path: "builds"
+
+      # builds klasöründeki eski dosyaları (.git hariç) tamamen temizler
+      # böylece her derlemede branch sıfırdan oluşturulmuş gibi güncel kalır
+      - name: Clean builds branch
+        run: |
+          cd $GITHUB_WORKSPACE/builds
+          find . -mindepth 1 -not -path './.git*' -delete
+
+      # Derleme için JDK 21 kurulumu
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      # Android SDK kurulumu
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      # Eklentileri derler ve çıktı dosyalarını builds klasörüne kopyalar
+      - name: Build Plugins
+        run: |
+          cd $GITHUB_WORKSPACE/src
+          # gradlew dosyasında olası Windows satır sonlarını (CRLF) temizler
+          sed -i 's/\r$//' gradlew
+          chmod +x gradlew
+          ./gradlew make makePluginsJson
+          # Derlenen .cs3 eklenti dosyalarını builds klasörüne kopyalar
+          cp **/build/*.cs3 $GITHUB_WORKSPACE/builds || true
+          # Eklenti listesini içeren plugins.json dosyasını kopyalar
+          cp build/plugins.json $GITHUB_WORKSPACE/builds || true
+
+      # Derlenen dosyaları builds branch'ine gönderir
+      - name: Push builds
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd $GITHUB_WORKSPACE/builds
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add .
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+          # Önceki commit'i güncelleyerek (amend) branch geçmişini tek commit'te tutar
+          git commit --amend -m "Build $GITHUB_SHA" || git commit -m "Build $GITHUB_SHA" || exit 0
+          git push origin builds --force
