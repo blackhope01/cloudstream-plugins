@@ -13,7 +13,7 @@
 ## Not
 
 **Bazı eklentiler şifrelidir.**
-**Şifre :** `blackhope01`
+- **Şifre :** `blackhope01`
 
 ---
 
