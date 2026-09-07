@@ -28,7 +28,30 @@ class CloseLoadExtractor : ExtractorApi() {
 
         var videoUrl: String? = null
 
-        val varPattern = Regex("""var\s+(s_\w+)\s*=\s*(dc_\w+)\s*\(\s*\[(.*?)\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
+        // Teşhis: packed JS var mı?
+        val hasPacker = rawHtml.contains("eval(function(p,a,c,k,e,d){")
+        Log.d(name, "Packed JS marker var mı: $hasPacker")
+
+        // Teşhis: dc_ fonksiyon adları ve konumları
+        val dcMatches = Regex("""(dc_\w+)""").findAll(rawHtml).map { it.value }.distinct().toList()
+        Log.d(name, "dc_ fonksiyon adları: $dcMatches")
+
+        // Teşnis: s_ değişken kalıpları
+        val sMatches = Regex("""var\s+(s_\w+)""").findAll(rawHtml).map { it.groupValues[1] }.distinct().toList()
+        Log.d(name, "s_ değişkenleri: $sMatches")
+
+        // Teşhis: ["...","..."] parts benzeri diziler (ilk 3 eşleşme, kırpık)
+        Regex("""\[\s*"[^"]*"\s*,\s*"[^"]*"""").findAll(rawHtml).take(5).forEachIndexed { i, m ->
+            Log.d(name, "Parts benzeri dizi #$i @${m.range.first}: ${m.value.take(80)}")
+        }
+
+        // Teşhis: eval( ve function yoğunluğu olan bölgeler
+        val evalIdx = rawHtml.indexOf("eval(")
+        if (evalIdx != -1) {
+            Log.d(name, "eval( konumu: $evalIdx, çevresi: ${rawHtml.substring(evalIdx, (evalIdx + 200).coerceAtMost(rawHtml.length))}")
+        }
+
+        val varPattern = Regex("""var\s+(\w+)\s*=\s*(\w+)\s*\(\s*\[(.*?)\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
         val varMatch = varPattern.find(rawHtml)
 
         if (varMatch != null) {
@@ -47,6 +70,7 @@ class CloseLoadExtractor : ExtractorApi() {
             val funcBody = extractFuncBody(rawHtml, funcName)
             if (funcBody != null) {
                 Log.d(name, "Fonksiyon body bulundu, uzunluk: ${funcBody.length}")
+                Log.d(name, "FUNC_BODY: $funcBody")
                 videoUrl = parseAndExecuteJs(funcBody, parts)
                 Log.d(name, "Dinamik çözülen URL: $videoUrl")
             } else {
@@ -151,83 +175,85 @@ class CloseLoadExtractor : ExtractorApi() {
     // ============================================================
     private fun parseAndExecuteJs(funcBody: String, parts: List<String>): String? {
         return try {
-            var value = parts.joinToString("")
-            Log.d(name, "JS Parser: value = '${value.take(50)}...'")
-
-            val body = funcBody.replace(Regex("""\s+"""), " ")
-
-            val operations = mutableListOf<Operation>()
-
-            // 1. atob(result) pozisyonlarını bul
-            Regex("""atob\s*\(\s*result\s*\)""").findAll(body).forEach {
-                operations.add(Operation(it.range.first, "atob"))
+            // 1. Gömülü string'leri yakala: var X = "seed"; var Y = "ops";
+            val seedMatch = Regex(
+                """var\s+(\w+)\s*=\s*"([^"]+)"\s*;\s*var\s+(\w+)\s*=\s*"([^"]+)""""
+            ).find(funcBody) ?: run {
+                Log.w(name, "Seed/ops string'leri bulunamadı")
+                return null
             }
+            val seedStr = seedMatch.groupValues[2]
+            val opsStr = seedMatch.groupValues[4]
+            Log.d(name, "Seed: '$seedStr', Ops: '$opsStr'")
 
-            // 2. Caesar shift pozisyonunu bul
-            Regex("""replace\s*\(\s*/\[a-zA-Z\]/g.*?String\.fromCharCode\(\(o\s*-\s*base\s*\+\s*(\d+)\)""", RegexOption.DOT_MATCHES_ALL)
-                .findAll(body).forEach {
-                    operations.add(Operation(it.range.first, "caesar:${it.groupValues[1]}"))
-                }
+            var la8q = parts.joinToString("")
 
-            // 3. XOR unmix pozisyonunu bul
-            Regex("""for\s*\(\s*let\s+i\s*=\s*0.*?acc\s*=\s*\(\s*acc\s*\+\s*(\d+)\)""", RegexOption.DOT_MATCHES_ALL)
-                .findAll(body).forEach {
-                    val inc = it.groupValues[1].toInt()
-                    val accMatch = Regex("""(?:var|let|const)\s+acc\s*=\s*(\d+)""").find(body)
-                    val accStart = accMatch?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                    operations.add(Operation(it.range.first, "xor:$accStart:$inc"))
-                }
-
-            // 4. reverse() pozisyonunu bul (eğer varsa)
-            Regex("""\.reverse\(\)""").findAll(body).forEach {
-                operations.add(Operation(it.range.first, "reverse"))
+            // 2. Anahtar türetme
+            var m1l = 0
+            var rfdgf = 0
+            for (i in seedStr.indices) {
+                val ioz = seedStr[i].code
+                m1l = (m1l * 31 + ioz) % 251
+                rfdgf = (rfdgf xor (ioz + i)) and 255
             }
+            val ucv = (m1l + rfdgf) % 256
+            val h52gx = (m1l % 13) + 3
+            var ws7g = ((m1l * 256 + rfdgf) % 65521) + 1
+            Log.d(name, "ucv=$ucv, h52gx=$h52gx, ws7g=$ws7g")
 
-            // 5. btoa(result) pozisyonunu bul (eğer varsa)
-            Regex("""btoa\s*\(\s*result\s*\)""").findAll(body).forEach {
-                operations.add(Operation(it.range.first, "btoa"))
-            }
-
-            // Pozisyona göre sırala ve uygula
-            operations.sortBy { it.pos }
-
-            Log.d(name, "JS Parser: ${operations.size} işlem bulundu: ${operations.map { it.type }}")
-
-            for (op in operations) {
-                when {
-                    op.type == "atob" -> {
-                        value = atob(value)
-                        Log.d(name, "JS Parser: atob -> '${value.take(50)}...'")
-                    }
-                    op.type == "btoa" -> {
-                        value = btoa(value)
-                        Log.d(name, "JS Parser: btoa -> '${value.take(50)}...'")
-                    }
-                    op.type == "reverse" -> {
-                        value = value.reversed()
-                        Log.d(name, "JS Parser: reverse -> '${value.take(50)}...'")
-                    }
-                    op.type.startsWith("caesar:") -> {
-                        val shift = op.type.substringAfter(":").toInt()
-                        value = caesarShift(value, shift)
-                        Log.d(name, "JS Parser: caesar +$shift -> '${value.take(50)}...'")
-                    }
-                    op.type.startsWith("xor:") -> {
-                        val (_, accStart, inc) = op.type.split(":")
-                        value = xorUnmix(value, accStart.toInt(), inc.toInt())
-                        Log.d(name, "JS Parser: XOR unmix acc=$accStart, +$inc -> '${value.take(50)}...'")
+            // 3. Operasyonlar — opsStr TERSTEN işlenir
+            for (i in opsStr.length - 1 downTo 0) {
+                val ch = opsStr[i]
+                la8q = when (ch) {
+                    'b' -> atob(la8q)
+                    'v' -> la8q.reversed()
+                    else -> {
+                        val tcxa = (26 - ((ch.code - 64) % 26)) % 26
+                        caesarShift(la8q, tcxa)
                     }
                 }
             }
+            // Ekstra kontrol: ops dizisi çok uzunsa reverse (JS'teki vtr.length > 4096)
+            if (opsStr.length > 4096) la8q = la8q.reversed()
 
-            if (value.contains("http")) value.trim() else null
+            Log.d(name, "Operasyonlar sonrası uzunluk: ${la8q.length}")
+
+            // 4. Deterministik shuffle
+            val tmzq = la8q.length
+            if (tmzq > 1) {
+                val gtwld = IntArray(tmzq)
+                for (xfm8 in tmzq - 1 downTo 1) {
+                    ws7g = (ws7g * 75 + 74) % 65537
+                    gtwld[xfm8] = ws7g % (xfm8 + 1)
+                }
+                val onw = la8q.toCharArray()
+                for (xfm8 in 1 until tmzq) {
+                    val j = gtwld[xfm8]
+                    val tmp = onw[xfm8]
+                    onw[xfm8] = onw[j]
+                    onw[j] = tmp
+                }
+                la8q = String(onw)
+            }
+
+            // 5. XOR unmix
+            val sb = StringBuilder(tmzq)
+            var ew0 = ucv
+            for (c in la8q) {
+                val ioz = c.code
+                ew0 = (ew0 + h52gx) % 256
+                sb.append((ioz xor ew0).toChar())
+                ew0 = (ew0 + ioz) % 256
+            }
+
+            val result = sb.toString()
+            Log.d(name, "Çözülen değer: ${result.take(200)}")
+            result.trim().takeIf { it.startsWith("http") }
         } catch (e: Exception) {
             Log.e(name, "JS Parser hatası: ${e.message}")
             null
         }
     }
-
-    private data class Operation(val pos: Int, val type: String)
 
     private fun atob(s: String): String {
         var str = s.trim()

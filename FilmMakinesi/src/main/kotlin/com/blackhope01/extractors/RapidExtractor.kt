@@ -204,57 +204,84 @@ class RapidExtractor : ExtractorApi() {
     // ============================================================
     private fun parseAndExecuteJs(funcBody: String, parts: List<String>): String? {
         return try {
-            var value = parts.joinToString("")
-            val body = funcBody.replace(Regex("""\s+"""), " ")
-            val operations = mutableListOf<Operation>()
-
-            Regex("""atob\s*\(\s*result\s*\)""").findAll(body).forEach {
-                operations.add(Operation(it.range.first, "atob"))
+            // 1. Gömülü string'leri yakala: var X="seed";var Y="ops";
+            //    (seed = anahtar türetme dizgisi, ops = atob/reverse/caesar dizisi)
+            val seedMatch = Regex(
+                """var\s+(\w+)\s*=\s*"([^"]+)"\s*;\s*var\s+(\w+)\s*=\s*"([^"]+)""""
+            ).find(funcBody) ?: run {
+                Log.w(name, "Seed/ops string'leri bulunamadı")
+                return null
             }
-            Regex("""replace\s*\(\s*/\[a-zA-Z\]/g.*?String\.fromCharCode\(\(o\s*-\s*base\s*\+\s*(\d+)\)""", RegexOption.DOT_MATCHES_ALL)
-                .findAll(body).forEach {
-                    operations.add(Operation(it.range.first, "caesar:${it.groupValues[1]}"))
-                }
-            Regex("""for\s*\(\s*let\s+i\s*=\s*0.*?acc\s*=\s*\(\s*acc\s*\+\s*(\d+)\)""", RegexOption.DOT_MATCHES_ALL)
-                .findAll(body).forEach {
-                    val inc = it.groupValues[1].toInt()
-                    val accMatch = Regex("""(?:var|let|const)\s+acc\s*=\s*(\d+)""").find(body)
-                    val accStart = accMatch?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                    operations.add(Operation(it.range.first, "xor:$accStart:$inc"))
-                }
-            Regex("""\.reverse\(\)""").findAll(body).forEach {
-                operations.add(Operation(it.range.first, "reverse"))
-            }
-            Regex("""btoa\s*\(\s*result\s*\)""").findAll(body).forEach {
-                operations.add(Operation(it.range.first, "btoa"))
-            }
+            val seedStr = seedMatch.groupValues[2]
+            val opsStr = seedMatch.groupValues[4]
+            Log.d(name, "Seed: '$seedStr', Ops: '$opsStr'")
 
-            operations.sortBy { it.pos }
-            Log.d(name, "JS Parser: ${operations.size} işlem: ${operations.map { it.type }}")
+            var u3e = parts.joinToString("")
 
-            for (op in operations) {
-                when {
-                    op.type == "atob" -> value = atob(value)
-                    op.type == "btoa" -> value = btoa(value)
-                    op.type == "reverse" -> value = value.reversed()
-                    op.type.startsWith("caesar:") -> {
-                        val shift = op.type.substringAfter(":").toInt()
-                        value = caesarShift(value, shift)
-                    }
-                    op.type.startsWith("xor:") -> {
-                        val (_, accStart, inc) = op.type.split(":")
-                        value = xorUnmix(value, accStart.toInt(), inc.toInt())
+            // 2. Anahtar türetme (fonksiyon body'sindeki algoritmanın birebir aynısı)
+            var gzx1 = 0
+            var mff = 0
+            for (i in seedStr.indices) {
+                val ngm = seedStr[i].code
+                gzx1 = (gzx1 * 31 + ngm) % 251
+                mff = (mff xor (ngm + i)) and 255
+            }
+            val ghihx = (gzx1 + mff) % 256
+            val cv1 = (gzx1 % 13) + 3
+            var pzvvv = ((gzx1 * 256 + mff) % 65521) + 1
+            Log.d(name, "ghihx=$ghihx, cv1=$cv1, pzvvv=$pzvvv")
+
+            // 3. Operasyonlar — opsStr TERSTEN işlenir
+            //    'b' = atob, 'v' = reverse, diğeri = Caesar (öteleme koddan türetilir)
+            for (i in opsStr.length - 1 downTo 0) {
+                val ch = opsStr[i]
+                u3e = when (ch) {
+                    'b' -> atob(u3e)
+                    'v' -> u3e.reversed()
+                    else -> {
+                        val oufo = (26 - ((ch.code - 64) % 26)) % 26
+                        caesarShift(u3e, oufo)
                     }
                 }
             }
-            value.trim().takeIf { it.contains("http") }
+            Log.d(name, "Operasyonlar sonrası uzunluk: ${u3e.length}")
+
+            // 4. Deterministik shuffle (PRNG: pzvvv)
+            val imm = u3e.length
+            if (imm > 1) {
+                val irdt = IntArray(imm)
+                for (sm7 in imm - 1 downTo 1) {
+                    pzvvv = (pzvvv * 75 + 74) % 65537
+                    irdt[sm7] = pzvvv % (sm7 + 1)
+                }
+                val arr = u3e.toCharArray()
+                for (sm7 in 1 until imm) {
+                    val j = irdt[sm7]
+                    val tmp = arr[sm7]
+                    arr[sm7] = arr[j]
+                    arr[j] = tmp
+                }
+                u3e = String(arr)
+            }
+
+            // 5. XOR unmix
+            val sb = StringBuilder(imm)
+            var to4 = ghihx
+            for (c in u3e) {
+                val ngm = c.code
+                to4 = (to4 + cv1) % 256
+                sb.append((ngm xor to4).toChar())
+                to4 = (to4 + ngm) % 256
+            }
+
+            val result = sb.toString()
+            Log.d(name, "Çözülen değer: ${result.take(200)}")
+            result.trim().takeIf { it.startsWith("http") }
         } catch (e: Exception) {
             Log.e(name, "JS Parser hatası: ${e.message}")
             null
         }
     }
-
-    private data class Operation(val pos: Int, val type: String)
 
     // ============================================================
     // YARDIMCI FONKSİYONLAR
@@ -278,19 +305,6 @@ class RapidExtractor : ExtractorApi() {
                 else -> c
             }
         }.joinToString("")
-    }
-
-    private fun xorUnmix(text: String, accStart: Int, increment: Int): String {
-        var acc = accStart
-        val unmix = StringBuilder()
-        for (i in text.indices) {
-            val b = text[i].code
-            acc = (acc + increment) % 256
-            val plain = b xor acc
-            acc = (acc + b) % 256
-            unmix.append(plain.toChar())
-        }
-        return unmix.toString()
     }
 
     private fun extractFuncBody(jsCode: String, funcName: String): String? {
