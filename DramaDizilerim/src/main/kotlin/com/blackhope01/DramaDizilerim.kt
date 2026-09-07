@@ -32,18 +32,10 @@ class DramaDizilerim : MainAPI() {
         "$mainUrl/p/shortmax/" to "ShortMax"
     )
 
-    private val passwordLock = PasswordLock(
-        correctPassword = "blackhope01",
-        prefsName = "dramadizilerim_prefs"
-    )
-
     // ============================================================
     // ANA SAYFA - Parse (Ana sayfa + Kategori + Platform)
     // ============================================================
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        if (!passwordLock.ensureUnlocked()) {
-            throw ErrorLoadingException("Şifre doğrulanmadı")
-        }
 
         Log.d(name, "getMainPage - Sayfa: $page, Kategori: ${request.name}")
 
