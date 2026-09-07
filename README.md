@@ -10,7 +10,7 @@
 
 ---
 
-## Not
+## Not 
 
 **Bazı eklentiler şifrelidir.**
 - **Şifre :** `blackhope01`
