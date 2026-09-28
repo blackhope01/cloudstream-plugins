@@ -13,7 +13,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 class DiziYo : MainAPI() {
-    override var mainUrl = "https://www.diziyo.so"
+    override var mainUrl = "https://www.diziyo.so:443/login_up.php"
     override var name = "DiziYo"
     override val hasMainPage = true
     override var lang = "tr"
