@@ -13,7 +13,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaType
 
 class DiziMom : MainAPI() {
-    override var mainUrl = "https://www.dizimom.help"
+    override var mainUrl = "https://www.dizimom.wiki"
     override var name = "DiziMom"
     override val hasMainPage = true
     override var lang = "tr"
