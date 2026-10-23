@@ -11,7 +11,7 @@ import org.json.JSONObject
 import org.jsoup.nodes.Element
 
 class JetFilmizle : MainAPI() {
-    override var mainUrl = "https://jetfilmizle.now"
+    override var mainUrl = "https://jetfilmizle.app"
     override var name = "JetFilmizle"
     override val hasMainPage = true
     override var lang = "tr"
