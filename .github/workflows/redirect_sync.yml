@@ -31,11 +31,11 @@ jobs:
         with:
           token: ${{ secrets.PAT_TOKEN }}
 
-      # 2. Python 3.11.8'i kur
-      - name: Set up Python 3.11.8
+      # 2. Python 3.11'i kur
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: 3.11.8
+          python-version: 3.11
 
       # 3. Python sürümünü göster (debug amaçlı)
       - name: Display Python version
