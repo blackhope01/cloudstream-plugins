@@ -12,7 +12,7 @@ import java.net.URLEncoder
 
 
 class DiziLife : MainAPI() {
-    override var mainUrl = "https://dizi83.life"
+    override var mainUrl = "https://dizi84.life"
     override var name = "Dizilife"
     override val hasMainPage = true
     override var lang = "tr"
