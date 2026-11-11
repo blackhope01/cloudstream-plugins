@@ -12,7 +12,7 @@ import org.jsoup.nodes.Element
 
 
 class DramaDizilerim : MainAPI() {
-    override var mainUrl = "https://dramadizilerim.com"
+    override var mainUrl = "https://dramadizilerim1.com"
     override var name = "DramaDizilerim"
     override val hasMainPage = true
     override var lang = "tr"
